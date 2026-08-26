@@ -30,8 +30,28 @@ const LOCAL_UPLOADS = path.join(process.cwd(), "public", "work");
 /** Cache tag; the admin revalidates this after a write so edits show at once. */
 export const CONTENT_TAG = "site-content";
 
+/**
+ * Vercel lets you pick the env-var prefix when connecting a Blob store, so the
+ * token is not always called BLOB_READ_WRITE_TOKEN — pick a prefix of
+ * "AdminPower" and you get AdminPower_READ_WRITE_TOKEN instead. Rather than
+ * hardcode one name and fail silently into the on-disk fallback, find whatever
+ * the connection actually created.
+ */
+function blobToken(): string | undefined {
+  if (process.env.BLOB_READ_WRITE_TOKEN) return process.env.BLOB_READ_WRITE_TOKEN;
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key.endsWith("_READ_WRITE_TOKEN") && value) return value;
+  }
+  return undefined;
+}
+
+/** Connected projects can also authenticate over OIDC, with no token at all. */
+function hasBlobStore(): boolean {
+  return Object.keys(process.env).some((key) => key.endsWith("_STORE_ID"));
+}
+
 function usingBlob(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  return Boolean(blobToken()) || hasBlobStore();
 }
 
 function isCategory(value: unknown): value is WorkCategory {
@@ -79,7 +99,7 @@ export function normalize(raw: unknown): SiteContent {
 
 async function readFromBlob(): Promise<SiteContent> {
   const { list } = await import("@vercel/blob");
-  const { blobs } = await list({ prefix: BLOB_KEY, limit: 1 });
+  const { blobs } = await list({ prefix: BLOB_KEY, limit: 1, token: blobToken() });
   const blob = blobs.find((b) => b.pathname === BLOB_KEY);
   if (!blob) return defaultContent;
 
@@ -130,6 +150,7 @@ export async function writeContent(next: SiteContent): Promise<SiteContent> {
       addRandomSuffix: false,
       allowOverwrite: true,
       cacheControlMaxAge: 60,
+      token: blobToken(),
     });
   } else {
     await writeToDisk(content);
@@ -159,6 +180,7 @@ export async function saveThumbnail(file: File): Promise<string> {
       contentType: file.type || undefined,
       addRandomSuffix: false,
       allowOverwrite: true,
+      token: blobToken(),
     });
     return url;
   }
