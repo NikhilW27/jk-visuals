@@ -59,35 +59,54 @@ ok("filter narrows the grid", shown > 0 && shown < 9, `${shown} of 9 shown`);
 await page.getByRole("button", { name: "All", exact: true }).click();
 await page.waitForTimeout(700);
 
-// Contact form validation, then a valid submit with no Resend key configured.
+// Contact form: validates, then hands the enquiry to WhatsApp pre-filled.
+// window.open is stubbed so the assertion can read the URL that was built.
+await page.addInitScript(() => {
+  window.__waUrl = null;
+  window.open = (url) => {
+    window.__waUrl = String(url);
+    return null;
+  };
+});
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector('[data-hero-ready="true"]', { timeout: 30000 });
 await page.locator("#contact").scrollIntoViewIfNeeded();
-await page.waitForTimeout(700);
-await page.fill('textarea[name="message"]', "Testing the form.");
+await page.waitForTimeout(800);
+
+// Short number must be rejected before anything opens.
 await page.fill('input[name="name"]', "Test Person");
-await page.fill('input[name="email"]', "not-an-email");
-// Bypass native validation so the server-side checks are what is tested.
-// React re-renders the form after each submit, so this is re-applied.
-const relaxValidation = () =>
-  page.evaluate(() => {
-    document.querySelectorAll("#contact form").forEach((f) => f.setAttribute("novalidate", ""));
-    document.querySelectorAll("#contact input, #contact textarea").forEach((el) => {
-      el.removeAttribute("required");
-      if (el.getAttribute("type") === "email") el.setAttribute("type", "text");
-    });
-  });
+await page.fill('input[name="phone"]', "12345");
+await page.fill('textarea[name="message"]', "Two hours, outdoor mandap.");
+await page.getByRole("button", { name: /send on whatsapp/i }).click();
+await page.waitForTimeout(600);
+ok("short mobile number is rejected",
+   (await page.getByText(/full mobile number/i).count()) === 1);
+ok("nothing opened for an invalid number",
+   (await page.evaluate(() => window.__waUrl)) === null);
 
-await relaxValidation();
-await page.getByRole("button", { name: /send enquiry/i }).click();
-await page.waitForTimeout(4000);
-ok("invalid email is rejected server-side",
-   (await page.getByText(/email does not look right/i).count()) === 1);
+// Valid submission hands off to WhatsApp with every field carried across.
+await page.fill('input[name="phone"]', "9876543210");
+await page.selectOption('select[name="eventType"]', "Wedding");
+await page.fill('input[name="date"]', "2026-08-28");
+await page.getByRole("button", { name: /send on whatsapp/i }).click();
+await page.waitForTimeout(700);
 
-await relaxValidation();
-await page.fill('input[name="email"]', "someone@example.com");
-await page.getByRole("button", { name: /send enquiry/i }).click();
-await page.waitForTimeout(4000);
-ok("unconfigured Resend degrades to a clear message",
-   (await page.getByText(/not connected yet/i).count()) === 1);
+const waUrl = await page.evaluate(() => window.__waUrl);
+ok("opens a wa.me link", Boolean(waUrl && waUrl.startsWith("https://wa.me/")));
+const decoded = waUrl ? decodeURIComponent(waUrl.split("?text=")[1] ?? "") : "";
+for (const [field, expected] of [
+  ["name", "Test Person"],
+  ["mobile", "9876543210"],
+  ["event", "Wedding"],
+  ["date", "28/08/2026"],
+  ["details", "Two hours, outdoor mandap."],
+]) {
+  ok("message carries the " + field, decoded.includes(expected), expected);
+}
+ok("confirmation shown",
+   (await page.getByText(/press send there to finish/i).count()) === 1);
+ok("values kept after hand-off",
+   (await page.locator('input[name="name"]').inputValue()) === "Test Person");
 
 console.log(errors.length ? `\nconsole errors: ${errors.slice(0, 4).join(" | ")}` : "\nno console errors");
 await browser.close();

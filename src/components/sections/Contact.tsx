@@ -1,15 +1,9 @@
 "use client";
 
-import { useActionState, useId } from "react";
-import { useFormStatus } from "react-dom";
+import { useId, useState } from "react";
 import SectionHeader from "@/components/SectionHeader";
 import Magnetic from "@/components/Magnetic";
 import { Reveal } from "@/components/Reveal";
-import { sendEnquiry } from "@/lib/actions/contact";
-import {
-  initialContactState,
-  type ContactState,
-} from "@/lib/actions/contact-state";
 import type { ContactContent } from "@/lib/content/types";
 
 const EVENT_TYPES = [
@@ -26,44 +20,77 @@ const field =
 const labelStyle =
   "block font-mono text-[10px] tracking-[0.22em] text-bone/40 uppercase";
 
-function Submit() {
-  const { pending } = useFormStatus();
-  return (
-    <Magnetic>
-      <button
-        type="submit"
-        disabled={pending}
-        className="group inline-flex cursor-pointer items-center gap-3 py-1 text-sm tracking-wide text-bone disabled:cursor-wait disabled:text-bone/40"
-      >
-        <span className="relative">
-          {pending ? "Sending" : "Send enquiry"}
-          <span className="absolute -bottom-1 left-0 h-px w-full bg-bone/35 transition-colors duration-500 group-hover:bg-signal" />
-        </span>
-        <span
-          aria-hidden="true"
-          className="ease-editorial translate-y-px transition-transform duration-500 group-hover:translate-x-1"
-        >
-          &#8594;
-        </span>
-      </button>
-    </Magnetic>
-  );
+/** 10 digits for an Indian mobile, up to 13 to allow a country code. */
+const MIN_DIGITS = 10;
+const MAX_DIGITS = 13;
+
+type FieldErrors = Partial<Record<"name" | "phone" | "message", string>>;
+
+/** 2026-08-28 -> 28/08/2026, which is how the date will be read locally. */
+function readableDate(value: string): string {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
 }
 
 export default function Contact({ contact }: { contact: ContactContent }) {
-  const [state, action] = useActionState<ContactState, FormData>(
-    sendEnquiry,
-    initialContactState,
-  );
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [handedOff, setHandedOff] = useState(false);
   const uid = useId();
 
-  // React resets an uncontrolled form once the action resolves, so the inputs
-  // are re-keyed on every submit and seeded from whatever came back. On
-  // success no values come back, so they come up empty.
-  const seed = state.values;
-  const k = state.stamp ?? 0;
-
   const whatsapp = `https://wa.me/${contact.whatsapp}`;
+
+  /**
+   * The enquiry is handed to WhatsApp rather than emailed. window.open is
+   * called synchronously inside the submit handler so the browser still counts
+   * it as a user gesture — do it after an await and popup blockers eat it.
+   */
+  const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const read = (key: string) => String(data.get(key) ?? "").trim();
+
+    // Honeypot. Bots fill every field; humans never see this one.
+    if (read("company")) {
+      setHandedOff(true);
+      return;
+    }
+
+    const name = read("name");
+    const phone = read("phone");
+    const eventType = read("eventType");
+    const date = read("date");
+    const message = read("message");
+    const digits = phone.replace(/\D/g, "");
+
+    const next: FieldErrors = {};
+    if (!name) next.name = "Please add your name.";
+    if (!phone) next.phone = "Please add a mobile number.";
+    else if (digits.length < MIN_DIGITS || digits.length > MAX_DIGITS) {
+      next.phone = "That does not look like a full mobile number.";
+    }
+    if (!message) next.message = "Please add a few details.";
+
+    setErrors(next);
+    if (Object.keys(next).length > 0) return;
+
+    const lines = [
+      "New enquiry from the website",
+      "",
+      `Name: ${name}`,
+      `Mobile: ${phone}`,
+      eventType ? `Event: ${eventType}` : null,
+      date ? `Date: ${readableDate(date)}` : null,
+      "",
+      message,
+    ].filter((line) => line !== null);
+
+    window.open(
+      `${whatsapp}?text=${encodeURIComponent(lines.join("\n"))}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    setHandedOff(true);
+  };
 
   return (
     <section id="contact" className="shell scroll-mt-8 py-28 md:py-40">
@@ -114,7 +141,7 @@ export default function Contact({ contact }: { contact: ContactContent }) {
         </div>
 
         <Reveal className="lg:col-span-7 lg:col-start-6" delay={0.14}>
-          <form action={action} className="grid gap-10 sm:grid-cols-2">
+          <form onSubmit={onSubmit} noValidate className="grid gap-10 sm:grid-cols-2">
             {/* Honeypot: off-screen, not hidden, so bots still fill it. */}
             <div className="absolute left-[-9999px]" aria-hidden="true">
               <label htmlFor={`${uid}-company`}>Company</label>
@@ -132,49 +159,40 @@ export default function Contact({ contact }: { contact: ContactContent }) {
                 Name
               </label>
               <input
-                key={`name-${k}`}
                 id={`${uid}-name`}
                 name="name"
-                defaultValue={seed?.name ?? ""}
                 type="text"
-                required
                 autoComplete="name"
                 placeholder="Your name"
-                aria-invalid={Boolean(state.fieldErrors?.name)}
-                aria-describedby={
-                  state.fieldErrors?.name ? `${uid}-name-error` : undefined
-                }
+                aria-invalid={Boolean(errors.name)}
+                aria-describedby={errors.name ? `${uid}-name-error` : undefined}
                 className={`${field} mt-3`}
               />
-              {state.fieldErrors?.name ? (
+              {errors.name ? (
                 <p id={`${uid}-name-error`} className="mt-2 text-xs text-signal">
-                  {state.fieldErrors.name}
+                  {errors.name}
                 </p>
               ) : null}
             </div>
 
             <div>
-              <label htmlFor={`${uid}-email`} className={labelStyle}>
-                Email
+              <label htmlFor={`${uid}-phone`} className={labelStyle}>
+                Mobile
               </label>
               <input
-                key={`email-${k}`}
-                id={`${uid}-email`}
-                name="email"
-                defaultValue={seed?.email ?? ""}
-                type="email"
-                required
-                autoComplete="email"
-                placeholder="you@example.com"
-                aria-invalid={Boolean(state.fieldErrors?.email)}
-                aria-describedby={
-                  state.fieldErrors?.email ? `${uid}-email-error` : undefined
-                }
+                id={`${uid}-phone`}
+                name="phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="98765 43210"
+                aria-invalid={Boolean(errors.phone)}
+                aria-describedby={errors.phone ? `${uid}-phone-error` : undefined}
                 className={`${field} mt-3`}
               />
-              {state.fieldErrors?.email ? (
-                <p id={`${uid}-email-error`} className="mt-2 text-xs text-signal">
-                  {state.fieldErrors.email}
+              {errors.phone ? (
+                <p id={`${uid}-phone-error`} className="mt-2 text-xs text-signal">
+                  {errors.phone}
                 </p>
               ) : null}
             </div>
@@ -184,10 +202,9 @@ export default function Contact({ contact }: { contact: ContactContent }) {
                 Event type
               </label>
               <select
-                key={`type-${k}`}
                 id={`${uid}-type`}
                 name="eventType"
-                defaultValue={seed?.eventType ?? ""}
+                defaultValue=""
                 className={`${field} mt-3 cursor-pointer`}
               >
                 <option value="" className="bg-ink">
@@ -206,10 +223,8 @@ export default function Contact({ contact }: { contact: ContactContent }) {
                 Date
               </label>
               <input
-                key={`date-${k}`}
                 id={`${uid}-date`}
                 name="date"
-                defaultValue={seed?.date ?? ""}
                 type="date"
                 className={`${field} mt-3 cursor-pointer`}
               />
@@ -220,41 +235,60 @@ export default function Contact({ contact }: { contact: ContactContent }) {
                 Details
               </label>
               <textarea
-                key={`message-${k}`}
                 id={`${uid}-message`}
                 name="message"
-                defaultValue={seed?.message ?? ""}
-                required
                 rows={4}
                 placeholder="Where it is, roughly how long, and what you have in mind."
-                aria-invalid={Boolean(state.fieldErrors?.message)}
+                aria-invalid={Boolean(errors.message)}
                 aria-describedby={
-                  state.fieldErrors?.message ? `${uid}-message-error` : undefined
+                  errors.message ? `${uid}-message-error` : undefined
                 }
                 className={`${field} mt-3 resize-none`}
               />
-              {state.fieldErrors?.message ? (
+              {errors.message ? (
                 <p
                   id={`${uid}-message-error`}
                   className="mt-2 text-xs text-signal"
                 >
-                  {state.fieldErrors.message}
+                  {errors.message}
                 </p>
               ) : null}
             </div>
 
-            <div className="flex flex-wrap items-center gap-6 sm:col-span-2">
-              <Submit />
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-3 sm:col-span-2">
+              <Magnetic>
+                <button
+                  type="submit"
+                  className="group inline-flex cursor-pointer items-center gap-3 py-1 text-sm tracking-wide text-bone"
+                >
+                  <span className="relative">
+                    Send on WhatsApp
+                    <span className="absolute -bottom-1 left-0 h-px w-full bg-bone/35 transition-colors duration-500 group-hover:bg-signal" />
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="ease-editorial translate-y-px transition-transform duration-500 group-hover:translate-x-1"
+                  >
+                    &#8594;
+                  </span>
+                </button>
+              </Magnetic>
+
               <p
                 role="status"
                 aria-live="polite"
-                className={`text-[13px] ${
-                  state.status === "ok" ? "text-cyan" : "text-signal"
-                }`}
+                className="text-[13px] text-cyan"
               >
-                {state.message}
+                {handedOff
+                  ? "WhatsApp is open with your enquiry - press send there to finish."
+                  : ""}
               </p>
             </div>
+
+            <p className="text-xs leading-relaxed text-bone/30 sm:col-span-2">
+              This opens WhatsApp with your details filled in. Nothing is sent
+              until you press send there.
+            </p>
           </form>
         </Reveal>
       </div>
