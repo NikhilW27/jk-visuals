@@ -23,21 +23,15 @@ ok("no iframe loaded up front", (await page.locator("iframe").count()) === 0);
 await page.locator("#work").scrollIntoViewIfNeeded();
 await page.waitForTimeout(900);
 
-// Open a work item. Hovering first is what pauses the drift; without that
-// Playwright's stability check never settles on a moving card.
+// Open a work item. Only the front card opens the lightbox; the others
+// bring themselves forward first.
 const firstCard = await page.evaluate(() => {
-  const cards = [...document.querySelectorAll("#work .reel-card")];
-  const card = cards.find((c) => {
-    const r = c.getBoundingClientRect();
-    return r.left > 40 && r.right < innerWidth - 40 && r.top > 40 && r.bottom < innerHeight - 40;
-  });
+  const card = document.querySelector('#work [data-reel][data-focused="true"]');
   if (!card) return null;
   const r = card.getBoundingClientRect();
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 });
-ok("a reel card is on screen", Boolean(firstCard));
-await page.mouse.move(firstCard.x, firstCard.y);
-await page.waitForTimeout(500);
+ok("a front card is on screen", Boolean(firstCard));
 await page.mouse.click(firstCard.x, firstCard.y);
 await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
 await page.waitForTimeout(700);
@@ -68,7 +62,7 @@ ok("scroll unlocked", await page.evaluate(() =>
 // Category filter.
 await page.getByRole("button", { name: "Wedding", exact: true }).click();
 await page.waitForTimeout(900);
-const shown = await page.locator("#work .reel-card").count();
+const shown = await page.locator("#work [data-reel]").count();
 ok("filter narrows the wall", shown > 0 && shown < 27, shown + " cards of 27");
 await page.getByRole("button", { name: "All", exact: true }).click();
 await page.waitForTimeout(700);

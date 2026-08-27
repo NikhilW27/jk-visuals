@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import Lightbox from "@/components/Lightbox";
 import SectionHeader from "@/components/SectionHeader";
-import ReelMarquee from "@/components/sections/ReelMarquee";
+import ReelCoverflow from "@/components/sections/ReelCoverflow";
 import { Reveal } from "@/components/Reveal";
 import { WORK_CATEGORIES, type WorkItem } from "@/lib/content/types";
 
@@ -59,7 +59,7 @@ export default function Work({ items }: { items: WorkItem[] }) {
           >
             <p className="max-w-[38ch] text-[15px] leading-relaxed text-bone/55">
               Shot on location across Khamgaon and Vidarbha, then cut and graded
-              in the same hands. Scroll the wall, tap any frame to watch it.
+              in the same hands. Drag through them, tap the front one to watch it.
             </p>
           </Reveal>
         </div>
@@ -99,8 +99,7 @@ export default function Work({ items }: { items: WorkItem[] }) {
         ) : null}
       </div>
 
-      {/* Full-bleed, so the strips run past the gutters. */}
-      <ReelMarquee items={shown} onOpen={setOpenIndex} reduced={reduced} />
+      <ReelCoverflow items={shown} onOpen={setOpenIndex} reduced={reduced} />
 
       <Lightbox
         items={shown}
