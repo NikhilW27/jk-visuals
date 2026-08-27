@@ -13,10 +13,14 @@ type Props = {
   set: SequenceSet | null;
   /** Reduced motion: paint one frame and never bind to scroll. */
   frozen?: boolean;
-  /** Fired with the current angle when the drawn frame changes. Render-free. */
-  onFrame?: (degrees: number) => void;
   className?: string;
 };
+
+/** Playback rate of the ambient sway. The source is 7.2fps, so staying near
+ *  it keeps the motion reading as footage rather than as stepping frames. */
+const IDLE_FPS = 6;
+/** How many frames the sway travels through, at either end of its swing. */
+const IDLE_SPAN = 8;
 
 /**
  * Scroll distance over which the whole sweep plays out. Viewport-relative so
@@ -32,7 +36,6 @@ export default function FrameSequenceCanvas({
   frames,
   set,
   frozen = false,
-  onFrame,
   className,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -45,10 +48,8 @@ export default function FrameSequenceCanvas({
   // just because a prop identity changed. Declared before the effects that
   // read them, so they are always current by the time those run.
   const framesRef = useRef(frames);
-  const onFrameRef = useRef(onFrame);
   useEffect(() => {
     framesRef.current = frames;
-    onFrameRef.current = onFrame;
   });
 
   /** Nearest frame at or before `index` that actually decoded. */
@@ -121,7 +122,12 @@ export default function FrameSequenceCanvas({
   // Repaint when a new set finishes loading.
   useEffect(() => {
     const index = paintedIndex.current < 0 ? 0 : paintedIndex.current;
-    if (paint(index)) paintedIndex.current = index;
+    if (!paint(index)) return;
+    paintedIndex.current = index;
+    const canvas = canvasRef.current;
+    if (canvas && canvas.dataset.degrees === undefined) {
+      canvas.dataset.degrees = "0";
+    }
   }, [frames, set, paint]);
 
   // Scroll to frame index, driven by a single rAF loop. The scroll event is
@@ -133,7 +139,7 @@ export default function FrameSequenceCanvas({
     if (frozen) {
       if (paint(0)) {
         paintedIndex.current = 0;
-        onFrameRef.current?.(0);
+        canvas.dataset.degrees = "0";
       }
       return;
     }
@@ -141,16 +147,43 @@ export default function FrameSequenceCanvas({
     let raf = 0;
     let running = false;
     const lastIndex = sweepFrameCount(set) - 1;
-    let distance = sweepDistance();
+    // Scroll drives the base; the sway rides on top of it. Reserving the
+    // sway's span keeps the total inside the loaded frames, and means the
+    // face is never parked on a single frame however you are scrolled.
+    const span = Math.min(IDLE_SPAN, Math.max(0, lastIndex - 1));
+    const base = Math.max(0, lastIndex - span);
 
-    const tick = () => {
+    let distance = sweepDistance();
+    let sway = 0;
+    let swayDir = 1;
+    let last = performance.now();
+
+    const tick = (now: number) => {
+      const delta = Math.min(now - last, 100) / 1000;
+      last = now;
+
+      // Ping-pong rather than wrap: reversing the orbit reads as natural
+      // camera movement, where looping back to frame zero would snap.
+      sway += swayDir * IDLE_FPS * delta;
+      if (sway >= span) {
+        sway = span;
+        swayDir = -1;
+      } else if (sway <= 0) {
+        sway = 0;
+        swayDir = 1;
+      }
+
       // Clamped, not wrapped: the subject turns through the sweep and holds
       // there rather than continuing round.
       const progress = Math.min(1, Math.max(0, window.scrollY / distance));
-      const index = Math.round(progress * lastIndex);
+      const index = Math.round(progress * base + sway);
+
       if (index !== paintedIndex.current && paint(index)) {
         paintedIndex.current = index;
-        onFrameRef.current?.(progress * HERO_SWEEP_DEGREES);
+        // Exposed for tests and debugging; nothing renders from it.
+        canvas.dataset.degrees = String(
+          Math.round((index / lastIndex) * HERO_SWEEP_DEGREES),
+        );
       }
       raf = requestAnimationFrame(tick);
     };

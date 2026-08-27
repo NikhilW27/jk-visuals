@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import {
   motion,
   useMotionValue,
@@ -39,7 +39,6 @@ const letter = {
 
 export default function Hero() {
   const sectionRef = useRef<HTMLElement | null>(null);
-  const degRef = useRef<HTMLSpanElement | null>(null);
   const { frames, set, progress, ready, reducedMotion } = useFrameSequence();
   const prefersReduced = useReducedMotion() ?? false;
 
@@ -84,12 +83,6 @@ export default function Hero() {
     return () => window.removeEventListener("pointermove", onMove);
   }, [prefersReduced, px, py]);
 
-  // Written straight to the DOM: a rotation readout must not cost a render.
-  const handleFrame = useCallback((degrees: number) => {
-    if (!degRef.current) return;
-    degRef.current.textContent = String(Math.round(degrees)).padStart(3, "0");
-  }, []);
-
   const canvasStyle = reducedMotion
     ? undefined
     : { opacity: canvasOpacity, scale: canvasScale };
@@ -127,7 +120,6 @@ export default function Hero() {
                   frames={frames}
                   set={set}
                   frozen={reducedMotion}
-                  onFrame={handleFrame}
                   className="h-full w-full"
                 />
               </motion.div>
@@ -149,23 +141,11 @@ export default function Hero() {
                   {/* Eyebrow and the live rotation readout share a rail. */}
                   <motion.div
                     variants={rise}
-                    className="flex items-center justify-between gap-6 font-mono text-[10px] tracking-[0.22em] text-bone/55 uppercase"
+                    className="flex items-center gap-6 font-mono text-[10px] tracking-[0.22em] text-bone/55 uppercase"
                   >
-                    <span className="flex items-center gap-4">
-                      <span className="h-px w-10 bg-signal" aria-hidden="true" />
-                      Videographer &amp; Editor
-                    </span>
-                    <span className="flex items-center gap-4">
-                      {/* Without this nothing tells a visitor the hero is
-                          interactive at all. */}
-                      <span className="hidden text-bone/30 sm:inline">
-                        {reducedMotion ? "Reduced motion" : "Scroll to rotate"}
-                      </span>
-                      <span aria-hidden="true" className="tabular-nums">
-                        <span ref={degRef}>000</span>
-                        <span className="text-bone/25">&#176;</span>
-                      </span>
-                    </span>
+                    <span className="h-px w-10 bg-signal" aria-hidden="true" />
+                    Videographer &amp; Editor
+
                   </motion.div>
 
                   <motion.h1

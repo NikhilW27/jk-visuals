@@ -12,18 +12,18 @@ for (const rm of ["reduce", "no-preference"]) {
 
   const before = await page.evaluate(() => {
     const seq = performance.getEntriesByType("resource").filter(e => /\/sequence/.test(e.name));
-    return { frames: seq.length, deg: document.body.innerText.match(/(\d{3})°/)?.[1], cue: document.body.innerText.match(/SCROLL TO ROTATE|REDUCED MOTION/i)?.[0] };
+    return { frames: seq.length, deg: document.querySelector("canvas[data-degrees]")?.dataset.degrees };
   });
 
   await page.evaluate(() => window.scrollTo(0, window.innerHeight * 0.6));
   await page.waitForTimeout(600);
   const after = await page.evaluate(() => ({
-    deg: document.body.innerText.match(/(\d{3})°/)?.[1],
+    deg: document.querySelector("canvas[data-degrees]")?.dataset.degrees,
     lenis: document.documentElement.classList.contains("lenis"),
   }));
 
   console.log(
-    `prefers-reduced-motion: ${rm.padEnd(14)} framesFetched=${String(before.frames).padStart(2)}  deg ${before.deg}->${after.deg}  lenis=${after.lenis}  cue="${before.cue}"`,
+    `prefers-reduced-motion: ${rm.padEnd(14)} framesFetched=${String(before.frames).padStart(2)}  deg ${before.deg}->${after.deg}  lenis=${after.lenis}`,
   );
   await page.close();
 }
