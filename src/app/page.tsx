@@ -1,4 +1,5 @@
 import Hero from "@/components/hero/Hero";
+import SiteNav from "@/components/SiteNav";
 import Work from "@/components/sections/Work";
 import Services from "@/components/sections/Services";
 import About from "@/components/sections/About";
@@ -63,6 +64,8 @@ export default async function Home() {
         // Static, author-controlled object — no user input reaches this.
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+
+      <SiteNav instagram={contact.instagram} />
 
       <main>
         <Hero />

@@ -17,7 +17,8 @@
     "shots:sections": "node scripts/shots-sections.mjs",
     "check:admin": "node scripts/check-admin.mjs",
     "check:interactions": "node scripts/check-interactions.mjs",
-    "check:sweep": "node scripts/check-sweep.mjs"
+    "check:sweep": "node scripts/check-sweep.mjs",
+    "check:hero-ui": "node scripts/check-hero-ui.mjs"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.0",

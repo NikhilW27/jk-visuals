@@ -113,10 +113,25 @@
     mask-image: linear-gradient(to bottom, #000 58%, transparent 97%);
   }
 
+  /* At lg the plate is centred behind the full-bleed name, so both vertical
+     edges need feathering. It over-fills the frame top and bottom, so those
+     edges are clipped rather than masked. */
   @media (min-width: 64rem) {
     .hero-plate {
-      -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 17%);
-      mask-image: linear-gradient(to right, transparent 0%, #000 17%);
+      -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        #000 15%,
+        #000 85%,
+        transparent 100%
+      );
+      mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        #000 15%,
+        #000 85%,
+        transparent 100%
+      );
     }
   }
 
