@@ -38,35 +38,24 @@ console.log(seen.join("  "));
 const max = Math.max(...seen.map((s) => Number(s.split(":")[1].replace("deg", ""))));
 console.log(max <= 130 ? `PASS  never exceeds 130 (peak ${max})` : `FAIL  peak ${max}`);
 
-// Deep in the hero the face keeps swaying, but must stay in the top band and
-// never wrap back toward 0.
+// Deep scroll must hold, not wrap back toward 0, and not drift on its own.
 await page.evaluate(() => window.scrollTo(0, window.innerHeight * 1.9));
 await page.waitForTimeout(900);
-const deep = [];
-for (let i = 0; i < 20; i += 1) {
-  deep.push(await readout());
-  await page.waitForTimeout(200);
-}
-const peak = Math.max(...deep);
-const trough = Math.min(...deep);
+const held = await readout();
 console.log(
-  peak >= 125 && trough > 70
-    ? `PASS  sways in the top band deep in the hero (${trough}-${peak})`
-    : `FAIL  reads ${trough}-${peak} deep in the hero`,
+  held === 130 ? `PASS  holds at 130 deep in the hero` : `FAIL  reads ${held}`,
 );
 
-// The sway must never park the face on one frame.
-await page.evaluate(() => window.scrollTo(0, 0));
-await page.waitForTimeout(700);
+// The subject turns only on scroll: with the page still, he must not move.
 const idle = [];
-for (let i = 0; i < 16; i += 1) {
+for (let i = 0; i < 12; i += 1) {
   idle.push(await readout());
   await page.waitForTimeout(200);
 }
 console.log(
-  new Set(idle).size > 3
-    ? `PASS  face animates while the page is still (${Math.min(...idle)}-${Math.max(...idle)})`
-    : `FAIL  face is static at rest`,
+  new Set(idle).size === 1
+    ? `PASS  still while the page is still (${idle[0]} deg)`
+    : `FAIL  drifts on its own (${Math.min(...idle)}-${Math.max(...idle)})`,
 );
 
 await browser.close();

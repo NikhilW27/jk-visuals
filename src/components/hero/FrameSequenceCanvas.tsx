@@ -16,12 +16,6 @@ type Props = {
   className?: string;
 };
 
-/** Playback rate of the ambient sway. The source is 7.2fps, so staying near
- *  it keeps the motion reading as footage rather than as stepping frames. */
-const IDLE_FPS = 6;
-/** How many frames the sway travels through, at either end of its swing. */
-const IDLE_SPAN = 8;
-
 /**
  * Scroll distance over which the whole sweep plays out. Viewport-relative so
  * the rotation feels the same on a phone as on a 27 inch display, and sized so
@@ -147,36 +141,13 @@ export default function FrameSequenceCanvas({
     let raf = 0;
     let running = false;
     const lastIndex = sweepFrameCount(set) - 1;
-    // Scroll drives the base; the sway rides on top of it. Reserving the
-    // sway's span keeps the total inside the loaded frames, and means the
-    // face is never parked on a single frame however you are scrolled.
-    const span = Math.min(IDLE_SPAN, Math.max(0, lastIndex - 1));
-    const base = Math.max(0, lastIndex - span);
-
     let distance = sweepDistance();
-    let sway = 0;
-    let swayDir = 1;
-    let last = performance.now();
 
-    const tick = (now: number) => {
-      const delta = Math.min(now - last, 100) / 1000;
-      last = now;
-
-      // Ping-pong rather than wrap: reversing the orbit reads as natural
-      // camera movement, where looping back to frame zero would snap.
-      sway += swayDir * IDLE_FPS * delta;
-      if (sway >= span) {
-        sway = span;
-        swayDir = -1;
-      } else if (sway <= 0) {
-        sway = 0;
-        swayDir = 1;
-      }
-
-      // Clamped, not wrapped: the subject turns through the sweep and holds
-      // there rather than continuing round.
+    const tick = () => {
+      // Scroll is the only thing that turns the subject. Clamped, not wrapped:
+      // he turns through the sweep and holds there rather than continuing round.
       const progress = Math.min(1, Math.max(0, window.scrollY / distance));
-      const index = Math.round(progress * base + sway);
+      const index = Math.round(progress * lastIndex);
 
       if (index !== paintedIndex.current && paint(index)) {
         paintedIndex.current = index;
