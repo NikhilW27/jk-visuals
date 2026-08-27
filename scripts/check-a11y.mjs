@@ -1,30 +1,37 @@
+/**
+ * Reduced-motion behaviour: Lenis must not run, and the hero portrait must
+ * still be served.
+ */
 import { chromium } from "playwright";
-const b = await chromium.launch({ channel: "msedge", headless: true });
 
-for (const rm of ["reduce", "no-preference"]) {
-  const page = await b.newPage({
+const URL = process.env.SHOT_URL ?? "http://localhost:3000";
+const browser = await chromium.launch({ channel: "msedge", headless: true });
+const ok = (l, p, e = "") =>
+  console.log(`${p ? "PASS" : "FAIL"}  ${l}${e ? `  ${e}` : ""}`);
+
+for (const reducedMotion of ["reduce", "no-preference"]) {
+  const page = await browser.newPage({
     viewport: { width: 1440, height: 900 },
-    reducedMotion: rm,
+    reducedMotion,
   });
-  await page.goto("http://localhost:3000", { waitUntil: "domcontentloaded" });
+  await page.goto(URL, { waitUntil: "domcontentloaded" });
   await page.waitForSelector('[data-hero-ready="true"]', { timeout: 30000 });
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1500);
 
-  const before = await page.evaluate(() => {
-    const seq = performance.getEntriesByType("resource").filter(e => /\/sequence/.test(e.name));
-    return { frames: seq.length, deg: document.querySelector("canvas[data-degrees]")?.dataset.degrees };
-  });
-
-  await page.evaluate(() => window.scrollTo(0, window.innerHeight * 0.6));
-  await page.waitForTimeout(600);
-  const after = await page.evaluate(() => ({
-    deg: document.querySelector("canvas[data-degrees]")?.dataset.degrees,
+  const state = await page.evaluate(() => ({
     lenis: document.documentElement.classList.contains("lenis"),
+    portrait: Boolean(document.querySelector("#top img")),
   }));
 
-  console.log(
-    `prefers-reduced-motion: ${rm.padEnd(14)} framesFetched=${String(before.frames).padStart(2)}  deg ${before.deg}->${after.deg}  lenis=${after.lenis}`,
-  );
+  const label = `prefers-reduced-motion: ${reducedMotion}`.padEnd(38);
+  if (reducedMotion === "reduce") {
+    ok(`${label}Lenis disabled`, state.lenis === false);
+  } else {
+    ok(`${label}Lenis running`, state.lenis === true);
+  }
+  ok(`${" ".repeat(38)}portrait served`, state.portrait);
+
   await page.close();
 }
-await b.close();
+
+await browser.close();
