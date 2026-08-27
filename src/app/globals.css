@@ -120,6 +120,45 @@
     }
   }
 
+  /* Display type filled with a vertical gradient, so headings catch light
+     the way the rim-lit footage does. */
+  .display-gradient {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-bone) 62%, transparent) 0%,
+      var(--color-bone) 55%,
+      color-mix(in srgb, var(--color-bone) 74%, transparent) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  /* 3D staging for the reel wall. The scene owns the perspective; the rows
+     tilt inside it so the strip recedes rather than sliding flat. */
+  .scene-3d {
+    perspective: 1500px;
+    perspective-origin: 50% 45%;
+  }
+
+  .reel-row {
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+
+  .reel-card {
+    transform-style: preserve-3d;
+    will-change: transform;
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reel-card {
+      transition: none;
+    }
+  }
+
   .tracking-display {
     letter-spacing: -0.035em;
   }
