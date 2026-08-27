@@ -9,7 +9,17 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false, nocache: true },
 };
 
-/** Reads cookies, so it is always dynamic and never cached. */
+/**
+ * Never prerender this route.
+ *
+ * isAuthenticated() returns early when ADMIN_PASSWORD is unset, without ever
+ * touching cookies() — so on a build where the variable is missing, Next sees
+ * no dynamic API, statically prerenders the page, and bakes in "signed out".
+ * Signing in would then appear to do nothing. The rendering mode of an auth
+ * gate must not depend on whether an environment variable happens to be set.
+ */
+export const dynamic = "force-dynamic";
+
 export default async function AdminPage() {
   if (!(await isAuthenticated())) {
     return <LoginForm configured={adminConfigured()} />;
